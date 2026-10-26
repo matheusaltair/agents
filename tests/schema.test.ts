@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 const root = join(__dirname, "..");
 const migration = readFileSync(join(root, "supabase/migrations/0001_init.sql"), "utf8");
+const rls = readFileSync(join(root, "supabase/migrations/0002_rls.sql"), "utf8");
 const seed = readFileSync(join(root, "supabase/seed.sql"), "utf8");
 
 let db: PGlite;
@@ -12,6 +13,7 @@ let db: PGlite;
 beforeEach(async () => {
   db = new PGlite();
   await db.exec(migration);
+  await db.exec(rls);
   await db.exec(seed);
 });
 

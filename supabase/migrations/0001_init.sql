@@ -24,7 +24,7 @@ create table agents (
   id               uuid primary key default gen_random_uuid(),
   role             agent_role   not null unique,
   name             text         not null,
-  model            text         not null default 'claude-sonnet-5-5',
+  model            text         not null default 'claude-opus-5-5',
   system_prompt    text         not null,
   status           agent_status not null default 'idle',
   current_task_id  uuid,
@@ -258,7 +258,7 @@ begin
 end $$;
 
 -- Orçamento restante do agente (o worker consulta antes de cada execução)
-create or replace view agent_budget as
+create or replace view agent_budget with (security_invoker = true) as
 select id, role, name,
        budget_tokens, spent_tokens, greatest(budget_tokens - spent_tokens, 0) as remaining_tokens,
        budget_usd, spent_usd, greatest(budget_usd - spent_usd, 0) as remaining_usd,

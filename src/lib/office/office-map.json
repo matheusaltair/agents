@@ -1,0 +1,24 @@
+{
+  "grid": { "columns": 12, "rows": 8, "tileSize": 56 },
+  "rooms": [
+    { "id": "analysis", "label": "Sala de Análise", "x": 0, "y": 0, "w": 6, "h": 4, "color": "#dbeafe" },
+    { "id": "dev", "label": "Desenvolvimento", "x": 6, "y": 0, "w": 6, "h": 4, "color": "#dcfce7" },
+    { "id": "review", "label": "Revisão", "x": 0, "y": 4, "w": 6, "h": 4, "color": "#fef3c7" },
+    { "id": "qa", "label": "Testes", "x": 6, "y": 4, "w": 6, "h": 4, "color": "#fce7f3" }
+  ],
+  "agents": {
+    "analyst": { "room": "analysis", "desk": { "x": 2, "y": 2 }, "idleSpot": { "x": 4, "y": 1 }, "avatar": "🧐" },
+    "developer": { "room": "dev", "desk": { "x": 8, "y": 2 }, "idleSpot": { "x": 10, "y": 1 }, "avatar": "👩‍💻" },
+    "reviewer": { "room": "review", "desk": { "x": 2, "y": 6 }, "idleSpot": { "x": 4, "y": 5 }, "avatar": "🔍" },
+    "tester": { "room": "qa", "desk": { "x": 8, "y": 6 }, "idleSpot": { "x": 10, "y": 5 }, "avatar": "🧪" }
+  },
+  "states": {
+    "idle": { "label": "ocioso", "animation": "idle", "atDesk": false, "bubble": "☕" },
+    "thinking": { "label": "pensando", "animation": "thinking", "atDesk": true, "bubble": "💭" },
+    "typing": { "label": "digitando", "animation": "typing", "atDesk": true, "bubble": "⌨️" },
+    "working": { "label": "trabalhando", "animation": "typing", "atDesk": true, "bubble": "⚙️" },
+    "reviewing": { "label": "revisando", "animation": "scanning", "atDesk": true, "bubble": "📝" },
+    "testing": { "label": "testando", "animation": "scanning", "atDesk": true, "bubble": "✅" },
+    "blocked": { "label": "bloqueado", "animation": "alert", "atDesk": true, "bubble": "⛔" }
+  }
+}

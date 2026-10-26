@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fábrica de Agentes
 
-## Getting Started
+Uma "empresa" de quatro agentes de IA que trabalha as issues de um repositório GitHub num quadro Kanban:
 
-First, run the development server:
+| Coluna | Agente | O que faz |
+|---|---|---|
+| To-do | — | Issues abertas entram aqui pela sincronização |
+| Análise | Analista | Valida requisitos, decompõe em subtarefas e escreve critérios de aceite |
+| In Progress | Desenvolvedor | Cria a branch `agent/issue-N` e faz commits com a solução |
+| Revisão | Revisor | Confere o diff contra os critérios; aprova ou devolve ao desenvolvedor |
+| Testes | Testador | Confere testes e CI e abre o Pull Request |
+| Done | — | PR aberto |
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Mover um cartão para uma coluna (arrastando no quadro ou pelo próprio fluxo) dispara o agente daquela coluna.
+
+## Como funciona
+
+```
+GitHub Issues ──sync/webhook──▶ tasks (todo)
+                                   │ arrastar no Kanban (DND Kit)
+                                   ▼
+           trigger tasks_column_change ──▶ agent_jobs (fila)
+                                   │ worker: claim_next_job()
+                                   ▼
+   Trust scan da issue ─▶ orçamento ok? ─▶ Claude (tool runner) com as ferramentas do papel
+                                   │ finish(done | rejected | blocked)
+                                   ▼
+   agent_runs (tokens, custo, trust) ─▶ mensagem ao próximo agente ─▶ cartão muda de coluna
+                                   │
+             Supabase Realtime ────┴──▶ Kanban e escritório virtual atualizam sozinhos
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Banco** (`supabase/migrations`): agentes e orçamento, tarefas, histórico (`task_events`), mensagens entre agentes, fila de jobs e execuções. Os triggers fazem o enfileiramento e a contabilidade de gasto.
+- **Agentes** (`src/lib/agents`): system prompts distintos em `prompts.ts`, ferramentas por papel em `tools.ts`, executor em `runner.ts`. O modelo padrão é `claude-opus-5-5`, com fallback do servidor em caso de recusa.
+- **Mensageria**: cada agente tem caixa de entrada (`agent_messages`). Ao concluir, o agente manda um `handoff` ao próximo; o revisor e o testador mandam `rejection` ao desenvolvedor quando devolvem o cartão. Mensagens não lidas entram no início da próxima execução. Depois de 3 devoluções o cartão para e pede um humano.
+- **Trust** (`src/lib/guard/trust.ts`): o texto da issue é varrido contra prompt injection antes de chegar ao modelo, e cada `write_file` do desenvolvedor é varrido contra vulnerabilidades antes do commit. O score fica no cartão.
+- **ROI** (`src/lib/guard/roi.ts`): custo por execução pela tabela de preços, saldo por agente (tokens e US$). Sem saldo o agente não começa; se o saldo acaba no meio, a execução para.
+- **Escritório virtual** (`src/lib/office/office-map.json`): salas, mesa de cada agente e animação de cada estado (`digitando`, `pensando`, `revisando`...). A página `/office` posiciona os agentes conforme o `status` no banco, em tempo real.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Sobre o Switch AI
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+O Switch Trust e o Switch ROI são da plataforma Switch, da SandboxAQ, que não tem SDK público. Por isso Trust e ROI estão implementados localmente atrás das interfaces `TrustScanner` (troque com `setTrustScanner`) e `RunMeter`. Com acesso ao Switch, basta escrever um adaptador para essas interfaces.
 
-## Learn More
+## Rodando
 
-To learn more about Next.js, take a look at the following resources:
+1. Crie um projeto no Supabase e aplique as migrações (`supabase db push`, ou cole os arquivos de `supabase/migrations` no SQL editor), depois `supabase/seed.sql`.
+2. Copie `.env.example` para `.env.local` e preencha. O `GITHUB_TOKEN` precisa de permissão de leitura de issues e escrita de conteúdo e pull requests no repositório de `GITHUB_REPO`.
+3. `npm install`, `npm run seed:agents` (grava os prompts completos), `npm run dev`.
+4. Sincronize as issues: `curl -X POST localhost:3000/api/github/sync`. Para tempo real, configure um webhook do GitHub (evento *Issues*) para `/api/github/webhook` com o `GITHUB_WEBHOOK_SECRET`.
+5. Rode o worker em outro terminal: `npm run worker`. Em produção, também dá para chamar `POST /api/worker/tick` por cron.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`npm test` roda o SQL num Postgres embarcado (PGlite) e testa Trust e ROI.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Pendências conhecidas
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Não há login: qualquer pessoa com acesso à URL pode mover cartões (e assim gastar orçamento). Antes de expor publicamente, proteja `/api/tasks/*` com Supabase Auth.
+- Os agentes trabalham via API do GitHub e não executam código; a validação de testes depende do CI do repositório.
+- O orçamento não reinicia sozinho por período (`budget_period_start` existe para isso).
